@@ -2,7 +2,7 @@
 description = "Build and package skill with binary"
 run = """
 cargo build --release
-DIST="dist/code-analyzer"
+DIST="dist/code-analyze"
 rm -rf "$DIST"
 mkdir -p "$DIST/scripts"
 cp target/release/analyze "$DIST/scripts/"

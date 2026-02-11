@@ -1,4 +1,4 @@
-# code-analyzer
+# code-analyze
 
 Tree-sitter based code structure analyzer for AI agents.
 
@@ -29,7 +29,7 @@ The binary is at `target/release/analyze`.
 mise run skill
 ```
 
-This creates `dist/code-analyzer/` with:
+This creates `dist/code-analyze/` with:
 - `SKILL.md` — skill metadata and usage instructions
 - `scripts/analyze` — the binary
 
@@ -38,7 +38,7 @@ This creates `dist/code-analyzer/` with:
 Symlink the packaged skill directory to where your agent discovers skills:
 
 ```bash
-ln -s "$(pwd)/dist/code-analyzer" ~/.claude/skills/code-analyzer
+ln -s "$(pwd)/dist/code-analyze" ~/.claude/skills/code-analyze
 ```
 
 Or symlink just the binary for direct CLI use:

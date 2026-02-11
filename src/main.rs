@@ -63,7 +63,7 @@ fn main() {
         .to_string_lossy()
         .to_string();
 
-    let result = code_analyzer::analyze(
+    let result = code_analyze::analyze(
         &args.path,
         args.focus.as_deref(),
         args.follow_depth,

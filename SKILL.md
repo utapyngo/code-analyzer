@@ -1,5 +1,5 @@
 ---
-name: code-analyzer
+name: code-analyze
 description: Analyze code structure and relationships using tree-sitter. Use when you need to understand a codebase, find function definitions, track symbol usage across files, or get a structural overview of a directory.
 ---
 
