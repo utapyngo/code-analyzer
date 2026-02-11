@@ -24,3 +24,6 @@ rayon = "1.10"
 ignore = "0.4.25"
 lru = "0.16"
 serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3"

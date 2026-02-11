@@ -118,3 +118,127 @@ impl FileTraverser {
         results
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_existing_path() {
+        let t = FileTraverser::new();
+        assert!(
+            t.validate_path(Path::new(env!("CARGO_MANIFEST_DIR")))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn validate_nonexistent_path() {
+        let t = FileTraverser::new();
+        let result = t.validate_path(Path::new("/tmp/nonexistent_xyz_12345"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[test]
+    fn collect_files_from_fixtures() {
+        let t = FileTraverser::new();
+        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let files = t.collect_files_for_focused(&fixtures, 3).unwrap();
+        assert!(
+            files.len() >= 4,
+            "expected at least 4 fixture files, got {}",
+            files.len()
+        );
+
+        let names: Vec<String> = files
+            .iter()
+            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .collect();
+        assert!(names.contains(&"sample.rs".to_string()));
+        assert!(names.contains(&"sample.py".to_string()));
+        assert!(names.contains(&"sample.js".to_string()));
+        assert!(names.contains(&"sample.go".to_string()));
+    }
+
+    #[test]
+    fn collect_files_skips_hidden_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let hidden = dir.path().join(".hidden");
+        std::fs::create_dir(&hidden).unwrap();
+        std::fs::write(hidden.join("secret.rs"), "fn hidden() {}").unwrap();
+        std::fs::write(dir.path().join("visible.rs"), "fn visible() {}").unwrap();
+
+        let t = FileTraverser::new();
+        let files = t.collect_files_for_focused(dir.path(), 3).unwrap();
+
+        let names: Vec<String> = files
+            .iter()
+            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .collect();
+        assert!(names.contains(&"visible.rs".to_string()));
+        assert!(!names.contains(&"secret.rs".to_string()));
+    }
+
+    #[test]
+    fn collect_files_respects_max_depth() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("top.rs"), "fn top() {}").unwrap();
+        let sub = dir.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("deep.rs"), "fn deep() {}").unwrap();
+
+        let t = FileTraverser::new();
+        // max_depth=1 should only get top-level files
+        let files = t.collect_files_for_focused(dir.path(), 1).unwrap();
+        let names: Vec<String> = files
+            .iter()
+            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .collect();
+        assert!(names.contains(&"top.rs".to_string()));
+        assert!(!names.contains(&"deep.rs".to_string()));
+    }
+
+    #[test]
+    fn collect_files_unlimited_depth() {
+        let dir = tempfile::tempdir().unwrap();
+        let deep = dir.path().join("a").join("b").join("c");
+        std::fs::create_dir_all(&deep).unwrap();
+        std::fs::write(deep.join("deep.rs"), "fn deep() {}").unwrap();
+
+        let t = FileTraverser::new();
+        let files = t.collect_files_for_focused(dir.path(), 0).unwrap();
+        let names: Vec<String> = files
+            .iter()
+            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .collect();
+        assert!(names.contains(&"deep.rs".to_string()));
+    }
+
+    #[test]
+    fn collect_files_ignores_non_source() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("readme.txt"), "hello").unwrap();
+        std::fs::write(dir.path().join("code.rs"), "fn f() {}").unwrap();
+
+        let t = FileTraverser::new();
+        let files = t.collect_files_for_focused(dir.path(), 3).unwrap();
+        assert_eq!(files.len(), 1);
+        assert!(files[0].to_string_lossy().contains("code.rs"));
+    }
+
+    #[test]
+    fn collect_directory_results_works() {
+        let t = FileTraverser::new();
+        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let results = t
+            .collect_directory_results(&fixtures, 3, |_path| Ok(AnalysisResult::empty(1)))
+            .unwrap();
+        assert!(results.len() >= 4);
+    }
+
+    #[test]
+    fn default_traverser() {
+        let _t = FileTraverser::default();
+    }
+}

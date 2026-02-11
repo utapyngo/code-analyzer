@@ -118,3 +118,57 @@ impl AnalysisResult {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn analysis_result_empty_has_correct_line_count() {
+        let r = AnalysisResult::empty(42);
+        assert_eq!(r.line_count, 42);
+        assert!(r.functions.is_empty());
+        assert!(r.classes.is_empty());
+        assert!(r.imports.is_empty());
+        assert!(r.calls.is_empty());
+        assert!(r.references.is_empty());
+        assert_eq!(r.function_count, 0);
+        assert_eq!(r.class_count, 0);
+        assert_eq!(r.import_count, 0);
+        assert!(r.main_line.is_none());
+    }
+
+    #[test]
+    fn analysis_mode_as_str() {
+        assert_eq!(AnalysisMode::Structure.as_str(), "structure");
+        assert_eq!(AnalysisMode::Semantic.as_str(), "semantic");
+        assert_eq!(AnalysisMode::Focused.as_str(), "focused");
+    }
+
+    #[test]
+    fn analysis_mode_equality() {
+        assert_eq!(AnalysisMode::Structure, AnalysisMode::Structure);
+        assert_ne!(AnalysisMode::Structure, AnalysisMode::Semantic);
+    }
+
+    #[test]
+    fn reference_type_equality() {
+        assert_eq!(ReferenceType::Call, ReferenceType::Call);
+        assert_ne!(ReferenceType::Call, ReferenceType::Definition);
+    }
+
+    #[test]
+    fn call_chain_stores_path() {
+        let chain = CallChain {
+            path: vec![(
+                PathBuf::from("test.rs"),
+                10,
+                "caller".into(),
+                "callee".into(),
+            )],
+        };
+        assert_eq!(chain.path.len(), 1);
+        assert_eq!(chain.path[0].2, "caller");
+        assert_eq!(chain.path[0].3, "callee");
+    }
+}

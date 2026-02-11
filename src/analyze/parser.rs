@@ -452,3 +452,123 @@ impl ElementExtractor {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parser_manager_creates_for_supported_languages() {
+        let pm = ParserManager::new();
+        for lang in &[
+            "python",
+            "rust",
+            "javascript",
+            "typescript",
+            "go",
+            "java",
+            "kotlin",
+            "swift",
+            "ruby",
+        ] {
+            assert!(pm.get_or_create_parser(lang).is_ok(), "failed for {}", lang);
+        }
+    }
+
+    #[test]
+    fn parser_manager_rejects_unsupported() {
+        let pm = ParserManager::new();
+        assert!(pm.get_or_create_parser("brainfuck").is_err());
+    }
+
+    #[test]
+    fn parser_manager_caches_parser() {
+        let pm = ParserManager::new();
+        let p1 = pm.get_or_create_parser("rust").unwrap();
+        let p2 = pm.get_or_create_parser("rust").unwrap();
+        assert!(std::sync::Arc::ptr_eq(&p1, &p2));
+    }
+
+    #[test]
+    fn parse_rust_code() {
+        let pm = ParserManager::new();
+        let tree = pm.parse("fn main() {}", "rust");
+        assert!(tree.is_ok());
+    }
+
+    #[test]
+    fn parse_python_code() {
+        let pm = ParserManager::new();
+        let tree = pm.parse("def hello():\n    pass\n", "python");
+        assert!(tree.is_ok());
+    }
+
+    #[test]
+    fn parse_go_code() {
+        let pm = ParserManager::new();
+        let tree = pm.parse("package main\nfunc main() {}\n", "go");
+        assert!(tree.is_ok());
+    }
+
+    #[test]
+    fn extract_elements_rust() {
+        let pm = ParserManager::new();
+        let code = "use std::io;\n\nstruct Foo;\n\nfn bar() {}\nfn main() {}\n";
+        let tree = pm.parse(code, "rust").unwrap();
+        let result = ElementExtractor::extract_elements(&tree, code, "rust").unwrap();
+        assert!(result.functions.iter().any(|f| f.name == "bar"));
+        assert!(result.functions.iter().any(|f| f.name == "main"));
+        assert!(result.classes.iter().any(|c| c.name == "Foo"));
+        assert!(result.main_line.is_some());
+    }
+
+    #[test]
+    fn extract_elements_python() {
+        let pm = ParserManager::new();
+        let code = "import os\n\nclass Foo:\n    pass\n\ndef bar():\n    pass\n";
+        let tree = pm.parse(code, "python").unwrap();
+        let result = ElementExtractor::extract_elements(&tree, code, "python").unwrap();
+        assert!(result.functions.iter().any(|f| f.name == "bar"));
+        assert!(result.classes.iter().any(|c| c.name == "Foo"));
+    }
+
+    #[test]
+    fn extract_with_depth_structure() {
+        let pm = ParserManager::new();
+        let code = "fn foo() {}\nfn main() {}\n";
+        let tree = pm.parse(code, "rust").unwrap();
+        let result =
+            ElementExtractor::extract_with_depth(&tree, code, "rust", "structure", None).unwrap();
+        // Structure mode clears functions/classes/imports
+        assert!(result.functions.is_empty());
+        assert!(result.classes.is_empty());
+        assert!(result.imports.is_empty());
+    }
+
+    #[test]
+    fn extract_with_depth_semantic() {
+        let pm = ParserManager::new();
+        let code = "fn foo() { bar(); }\nfn bar() {}\n";
+        let tree = pm.parse(code, "rust").unwrap();
+        let result =
+            ElementExtractor::extract_with_depth(&tree, code, "rust", "semantic", None).unwrap();
+        assert!(!result.functions.is_empty());
+        // Should have calls extracted
+        assert!(!result.calls.is_empty() || !result.references.is_empty());
+    }
+
+    #[test]
+    fn extract_elements_unsupported_returns_empty() {
+        let pm = ParserManager::new();
+        // Parse as JS but ask for elements of "haskell" which has no language info
+        let code = "function f() {}";
+        let tree = pm.parse(code, "javascript").unwrap();
+        let result = ElementExtractor::extract_elements(&tree, code, "haskell").unwrap();
+        assert!(result.functions.is_empty());
+    }
+
+    #[test]
+    fn parser_manager_default_works() {
+        let _pm = ParserManager::default();
+    }
+}

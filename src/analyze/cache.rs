@@ -80,3 +80,98 @@ impl Default for AnalysisCache {
         Self::new(100)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::SystemTime;
+
+    fn sample_result() -> AnalysisResult {
+        AnalysisResult::empty(10)
+    }
+
+    #[test]
+    fn cache_put_and_get() {
+        let cache = AnalysisCache::new(10);
+        let path = PathBuf::from("/tmp/test.rs");
+        let modified = SystemTime::now();
+        let mode = AnalysisMode::Semantic;
+
+        cache.put(path.clone(), modified, &mode, sample_result());
+        let result = cache.get(&path, modified, &mode);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().line_count, 10);
+    }
+
+    #[test]
+    fn cache_miss_on_different_time() {
+        let cache = AnalysisCache::new(10);
+        let path = PathBuf::from("/tmp/test.rs");
+        let t1 = SystemTime::UNIX_EPOCH;
+        let t2 = SystemTime::now();
+        let mode = AnalysisMode::Semantic;
+
+        cache.put(path.clone(), t1, &mode, sample_result());
+        let result = cache.get(&path, t2, &mode);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn cache_miss_on_different_mode() {
+        let cache = AnalysisCache::new(10);
+        let path = PathBuf::from("/tmp/test.rs");
+        let modified = SystemTime::now();
+
+        cache.put(
+            path.clone(),
+            modified,
+            &AnalysisMode::Semantic,
+            sample_result(),
+        );
+        let result = cache.get(&path, modified, &AnalysisMode::Structure);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn cache_miss_on_different_path() {
+        let cache = AnalysisCache::new(10);
+        let modified = SystemTime::now();
+        let mode = AnalysisMode::Semantic;
+
+        cache.put(PathBuf::from("/a.rs"), modified, &mode, sample_result());
+        let result = cache.get(Path::new("/b.rs"), modified, &mode);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn cache_evicts_when_full() {
+        let cache = AnalysisCache::new(2);
+        let t = SystemTime::now();
+        let mode = AnalysisMode::Semantic;
+
+        cache.put(PathBuf::from("/a.rs"), t, &mode, sample_result());
+        cache.put(PathBuf::from("/b.rs"), t, &mode, sample_result());
+        cache.put(PathBuf::from("/c.rs"), t, &mode, sample_result());
+
+        // /a.rs should have been evicted (LRU)
+        assert!(cache.get(Path::new("/a.rs"), t, &mode).is_none());
+        assert!(cache.get(Path::new("/c.rs"), t, &mode).is_some());
+    }
+
+    #[test]
+    fn cache_default_works() {
+        let cache = AnalysisCache::default();
+        let t = SystemTime::now();
+        cache.put(
+            PathBuf::from("/x.rs"),
+            t,
+            &AnalysisMode::Semantic,
+            sample_result(),
+        );
+        assert!(
+            cache
+                .get(Path::new("/x.rs"), t, &AnalysisMode::Semantic)
+                .is_some()
+        );
+    }
+}

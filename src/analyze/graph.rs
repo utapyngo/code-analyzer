@@ -201,3 +201,134 @@ impl CallGraph {
         chains
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::analyze::types::{AnalysisResult, CallInfo, ClassInfo, FunctionInfo};
+
+    fn make_result(funcs: &[&str], calls: &[(&str, &str)]) -> AnalysisResult {
+        let functions: Vec<FunctionInfo> = funcs
+            .iter()
+            .enumerate()
+            .map(|(i, name)| FunctionInfo {
+                name: name.to_string(),
+                line: i + 1,
+                params: vec![],
+            })
+            .collect();
+
+        let call_infos: Vec<CallInfo> = calls
+            .iter()
+            .enumerate()
+            .map(|(i, (caller, callee))| CallInfo {
+                caller_name: Some(caller.to_string()),
+                callee_name: callee.to_string(),
+                line: i + 10,
+                column: 0,
+                context: String::new(),
+            })
+            .collect();
+
+        AnalysisResult {
+            function_count: functions.len(),
+            class_count: 0,
+            import_count: 0,
+            line_count: 50,
+            functions,
+            classes: vec![],
+            imports: vec![],
+            calls: call_infos,
+            references: vec![],
+            main_line: None,
+        }
+    }
+
+    #[test]
+    fn empty_graph() {
+        let graph = CallGraph::new();
+        assert!(graph.definitions.is_empty());
+        assert!(graph.find_incoming_chains("x", 2).is_empty());
+        assert!(graph.find_outgoing_chains("x", 2).is_empty());
+    }
+
+    #[test]
+    fn build_from_results_records_definitions() {
+        let results = vec![(PathBuf::from("test.rs"), make_result(&["foo", "bar"], &[]))];
+        let graph = CallGraph::build_from_results(&results);
+        assert!(graph.definitions.contains_key("foo"));
+        assert!(graph.definitions.contains_key("bar"));
+        assert_eq!(graph.definitions["foo"].len(), 1);
+    }
+
+    #[test]
+    fn build_from_results_records_calls() {
+        let results = vec![(
+            PathBuf::from("test.rs"),
+            make_result(&["main", "helper"], &[("main", "helper")]),
+        )];
+        let graph = CallGraph::build_from_results(&results);
+
+        // main calls helper → helper has incoming from main
+        let incoming = graph.find_incoming_chains("helper", 1);
+        assert!(
+            !incoming.is_empty(),
+            "expected incoming chains for 'helper'"
+        );
+
+        // main calls helper → main has outgoing to helper
+        let outgoing = graph.find_outgoing_chains("main", 1);
+        assert!(!outgoing.is_empty(), "expected outgoing chains from 'main'");
+    }
+
+    #[test]
+    fn find_incoming_zero_depth() {
+        let results = vec![(
+            PathBuf::from("test.rs"),
+            make_result(&["a", "b"], &[("a", "b")]),
+        )];
+        let graph = CallGraph::build_from_results(&results);
+        assert!(graph.find_incoming_chains("b", 0).is_empty());
+    }
+
+    #[test]
+    fn find_outgoing_zero_depth() {
+        let results = vec![(
+            PathBuf::from("test.rs"),
+            make_result(&["a", "b"], &[("a", "b")]),
+        )];
+        let graph = CallGraph::build_from_results(&results);
+        assert!(graph.find_outgoing_chains("a", 0).is_empty());
+    }
+
+    #[test]
+    fn transitive_chains() {
+        // a -> b -> c
+        let results = vec![(
+            PathBuf::from("test.rs"),
+            make_result(&["a", "b", "c"], &[("a", "b"), ("b", "c")]),
+        )];
+        let graph = CallGraph::build_from_results(&results);
+
+        // At depth 2, c should see chain from a through b
+        let incoming = graph.find_incoming_chains("c", 2);
+        assert!(
+            !incoming.is_empty(),
+            "expected transitive incoming chains for 'c'"
+        );
+    }
+
+    #[test]
+    fn classes_added_to_definitions() {
+        let mut result = make_result(&[], &[]);
+        result.classes.push(ClassInfo {
+            name: "MyStruct".into(),
+            line: 5,
+            methods: vec![],
+        });
+        result.class_count = 1;
+        let results = vec![(PathBuf::from("test.rs"), result)];
+        let graph = CallGraph::build_from_results(&results);
+        assert!(graph.definitions.contains_key("MyStruct"));
+    }
+}

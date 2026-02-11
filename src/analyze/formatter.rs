@@ -644,3 +644,197 @@ impl Formatter {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::analyze::types::{
+        AnalysisResult, CallChain, ClassInfo, EntryType, FocusedAnalysisData, FunctionInfo,
+    };
+
+    fn sample_result() -> AnalysisResult {
+        AnalysisResult {
+            functions: vec![
+                FunctionInfo {
+                    name: "main".into(),
+                    line: 10,
+                    params: vec![],
+                },
+                FunctionInfo {
+                    name: "helper".into(),
+                    line: 20,
+                    params: vec![],
+                },
+            ],
+            classes: vec![ClassInfo {
+                name: "Config".into(),
+                line: 5,
+                methods: vec![],
+            }],
+            imports: vec!["use std::io".into()],
+            calls: vec![],
+            references: vec![],
+            function_count: 2,
+            class_count: 1,
+            line_count: 30,
+            import_count: 1,
+            main_line: Some(10),
+        }
+    }
+
+    #[test]
+    fn format_semantic_result_has_file_header() {
+        let result = sample_result();
+        let out = Formatter::format_semantic_result(Path::new("test.rs"), &result);
+        assert!(out.contains("FILE: test.rs"));
+        assert!(out.contains("[30L, 2F, 1C]"));
+    }
+
+    #[test]
+    fn format_semantic_result_has_functions() {
+        let out = Formatter::format_semantic_result(Path::new("test.rs"), &sample_result());
+        assert!(out.contains("F:"));
+        assert!(out.contains("main:10"));
+        assert!(out.contains("helper:20"));
+    }
+
+    #[test]
+    fn format_semantic_result_has_classes() {
+        let out = Formatter::format_semantic_result(Path::new("test.rs"), &sample_result());
+        assert!(out.contains("C:"));
+        assert!(out.contains("Config:5"));
+    }
+
+    #[test]
+    fn format_semantic_result_has_imports() {
+        let out = Formatter::format_semantic_result(Path::new("test.rs"), &sample_result());
+        assert!(out.contains("I:"));
+        assert!(out.contains("std"));
+    }
+
+    #[test]
+    fn format_structure_overview_compact() {
+        let result = sample_result();
+        let out = Formatter::format_structure_overview(Path::new("test.rs"), &result);
+        assert!(out.contains("test.rs"));
+        assert!(out.contains("[30L"));
+        assert!(out.contains("2F"));
+        assert!(out.contains("1C"));
+        assert!(out.contains("main:10"));
+    }
+
+    #[test]
+    fn format_structure_overview_no_main() {
+        let mut result = sample_result();
+        result.main_line = None;
+        let out = Formatter::format_structure_overview(Path::new("test.rs"), &result);
+        assert!(!out.contains("main:"));
+    }
+
+    #[test]
+    fn format_analysis_result_dispatches() {
+        let result = sample_result();
+        let sem =
+            Formatter::format_analysis_result(Path::new("t.rs"), &result, &AnalysisMode::Semantic);
+        assert!(sem.contains("FILE:"));
+        let struc =
+            Formatter::format_analysis_result(Path::new("t.rs"), &result, &AnalysisMode::Structure);
+        assert!(struc.contains("[30L"));
+        let focused =
+            Formatter::format_analysis_result(Path::new("t.rs"), &result, &AnalysisMode::Focused);
+        assert!(focused.is_empty());
+    }
+
+    #[test]
+    fn format_directory_structure_has_summary() {
+        let results = vec![
+            (
+                PathBuf::from("/proj/a.rs"),
+                EntryType::File(sample_result()),
+            ),
+            (
+                PathBuf::from("/proj/b.rs"),
+                EntryType::File(AnalysisResult::empty(5)),
+            ),
+        ];
+        let out = Formatter::format_directory_structure(Path::new("/proj"), &results, 3);
+        assert!(out.contains("SUMMARY:"));
+        assert!(out.contains("2 files"));
+        assert!(out.contains("PATH [LOC, FUNCTIONS, CLASSES]"));
+    }
+
+    #[test]
+    fn format_focused_output_with_definitions() {
+        let defs = vec![(PathBuf::from("test.rs"), 10)];
+        let data = FocusedAnalysisData {
+            focus_symbol: "main",
+            follow_depth: 2,
+            files_analyzed: &[PathBuf::from("test.rs")],
+            definitions: &defs,
+            incoming_chains: &[],
+            outgoing_chains: &[],
+        };
+        let out = Formatter::format_focused_output(&data);
+        assert!(out.contains("FOCUSED ANALYSIS: main"));
+        assert!(out.contains("DEFINITIONS:"));
+        assert!(out.contains("STATISTICS:"));
+    }
+
+    #[test]
+    fn format_focused_output_no_results() {
+        let data = FocusedAnalysisData {
+            focus_symbol: "missing",
+            follow_depth: 2,
+            files_analyzed: &[],
+            definitions: &[],
+            incoming_chains: &[],
+            outgoing_chains: &[],
+        };
+        let out = Formatter::format_focused_output(&data);
+        assert!(out.contains("not found"));
+    }
+
+    #[test]
+    fn format_focused_output_with_chains() {
+        let defs = vec![(PathBuf::from("a.rs"), 5)];
+        let chain = CallChain {
+            path: vec![(PathBuf::from("a.rs"), 10, "caller".into(), "target".into())],
+        };
+        let data = FocusedAnalysisData {
+            focus_symbol: "target",
+            follow_depth: 1,
+            files_analyzed: &[PathBuf::from("a.rs")],
+            definitions: &defs,
+            incoming_chains: &[chain.clone()],
+            outgoing_chains: &[chain],
+        };
+        let out = Formatter::format_focused_output(&data);
+        assert!(out.contains("INCOMING CALL CHAINS"));
+        assert!(out.contains("OUTGOING CALL CHAINS"));
+    }
+
+    #[test]
+    fn filter_by_focus_no_match() {
+        let out = Formatter::filter_by_focus("line one\nline two\n", "nonexistent");
+        assert!(out.contains("No results found"));
+    }
+
+    #[test]
+    fn filter_by_focus_with_match() {
+        let input = "## Header\nfoo bar baz\nother line\n";
+        let out = Formatter::filter_by_focus(input, "foo");
+        assert!(out.contains("foo bar baz"));
+    }
+
+    #[test]
+    fn safe_truncate_short_string() {
+        assert_eq!(safe_truncate("hello", 10), "hello");
+    }
+
+    #[test]
+    fn safe_truncate_long_string() {
+        let out = safe_truncate("hello world this is long", 10);
+        assert!(out.ends_with("..."));
+        assert!(out.len() <= 13); // 10 chars + "..."
+    }
+}

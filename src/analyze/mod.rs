@@ -308,3 +308,91 @@ pub fn analyze(
 
     output
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn code_analyzer_new() {
+        let _a = CodeAnalyzer::new();
+    }
+
+    #[test]
+    fn code_analyzer_default() {
+        let _a = CodeAnalyzer::default();
+    }
+
+    #[test]
+    fn determine_mode_focused_when_focus_set() {
+        let a = CodeAnalyzer::new();
+        let focus = Some("symbol".to_string());
+        assert_eq!(
+            a.determine_mode(&focus, Path::new(".")),
+            AnalysisMode::Focused
+        );
+    }
+
+    #[test]
+    fn determine_mode_semantic_for_file() {
+        let a = CodeAnalyzer::new();
+        let file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs");
+        assert_eq!(a.determine_mode(&None, &file), AnalysisMode::Semantic);
+    }
+
+    #[test]
+    fn determine_mode_structure_for_directory() {
+        let a = CodeAnalyzer::new();
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+        assert_eq!(a.determine_mode(&None, &dir), AnalysisMode::Structure);
+    }
+
+    #[test]
+    fn analyze_file_caches_result() {
+        let a = CodeAnalyzer::new();
+        let file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.rs");
+        let mode = AnalysisMode::Semantic;
+
+        // First call should populate cache
+        let r1 = a.analyze_file(&file, &mode, None).unwrap();
+        // Second call should hit cache
+        let r2 = a.analyze_file(&file, &mode, None).unwrap();
+
+        assert_eq!(r1.function_count, r2.function_count);
+        assert_eq!(r1.class_count, r2.class_count);
+        assert_eq!(r1.line_count, r2.line_count);
+    }
+
+    #[test]
+    fn analyze_file_unsupported_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("readme.txt");
+        std::fs::write(&file, "just text").unwrap();
+
+        let a = CodeAnalyzer::new();
+        let r = a
+            .analyze_file(&file, &AnalysisMode::Semantic, None)
+            .unwrap();
+        assert_eq!(r.function_count, 0);
+    }
+
+    #[test]
+    fn analyze_public_api_basic() {
+        let cwd = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .to_string_lossy()
+            .to_string();
+        let out = analyze("tests/fixtures/sample.rs", None, 2, 3, None, &cwd);
+        assert!(out.contains("FILE:"));
+    }
+
+    #[test]
+    fn analyze_public_api_absolute_path() {
+        let cwd = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .to_string_lossy()
+            .to_string();
+        let abs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.py");
+        let out = analyze(&abs.to_string_lossy(), None, 2, 3, None, &cwd);
+        assert!(out.contains("FILE:"));
+    }
+}
