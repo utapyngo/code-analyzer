@@ -1,5 +1,10 @@
 # code-analyze
 
+[![CI](https://github.com/utapyngo/code-analyze/actions/workflows/ci.yml/badge.svg)](https://github.com/utapyngo/code-analyze/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/code-analyze)](https://crates.io/crates/code-analyze)
+[![codecov](https://codecov.io/gh/utapyngo/code-analyze/graph/badge.svg)](https://codecov.io/gh/utapyngo/code-analyze)
+[![License](https://img.shields.io/crates/l/code-analyze)](LICENSE)
+
 Tree-sitter based code structure analyzer for AI agents.
 
 Analyzes code structure and relationships — file overviews, call graphs, and symbol tracking across codebases. Designed as an [Agent Skill](https://agentskills.io/specification) for use with AI coding assistants.
