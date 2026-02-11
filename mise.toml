@@ -1,0 +1,16 @@
+[tasks.skill]
+description = "Build and package skill with binary"
+run = """
+cargo build --release
+DIST="dist/code-analyzer"
+rm -rf "$DIST"
+mkdir -p "$DIST/scripts"
+cp target/release/analyze "$DIST/scripts/"
+cp SKILL.md "$DIST/"
+echo "Packaged: $DIST/"
+ls -lh "$DIST/" "$DIST/scripts/"
+"""
+
+[tasks.lint]
+description = "Run clippy and check formatting"
+run = "cargo clippy -- -D warnings && cargo fmt --check"

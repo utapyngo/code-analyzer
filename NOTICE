@@ -1,0 +1,15 @@
+code-analyzer
+Copyright 2025 utapyngo
+
+This project is a derivative work based on code from:
+  Goose - https://github.com/block/goose
+  Copyright 2024 Block, Inc.
+  Licensed under the Apache License, Version 2.0
+
+The original tree-sitter analysis code was extracted from the Goose project
+and modified into a standalone CLI tool. Changes include:
+  - Extracted analysis modules into independent crate
+  - Added CLI interface with clap
+  - Removed unused code paths and dead variants
+  - Reformatted output for compact display
+  - Packaged as Agent Skills spec compliant tool
